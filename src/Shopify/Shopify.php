@@ -138,6 +138,7 @@ class Shopify
             ]);
 
         $this->parseResponse($response);
+        $this->checkThrottle($method, $uri, $params = [], $headers = []);
         $responseBody = $this->responseBody($response);
 
         if (isset($responseBody['errors']) || $response->getStatusCode() >= 400){
@@ -166,6 +167,19 @@ class Shopify
         $this->parseHeaders($response->getHeaders());
         $this->setStatusCode($response->getStatusCode());
         $this->setReasonPhrase($response->getReasonPhrase());
+    }
+    
+    private function checkThrottle($method, $uri, $params = [], $headers = [])
+    {
+        if($this->hasHeader('HTTP_X_SHOPIFY_SHOP_API_CALL_LIMIT')){
+            $rateLimit = $this->getHeader('HTTP_X_SHOPIFY_SHOP_API_CALL_LIMIT');
+            $limit = explode('/', $rateLimit);
+            $callsRemaining = $limit[1] - $limit[0];
+            if($callsRemaining === 0){
+                sleep(2);
+                $this->makeRequest($method, $uri, $params, $headers);
+            }
+        }
     }
 
     public function verifyRequest($queryParams)
