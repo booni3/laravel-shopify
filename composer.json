@@ -27,8 +27,5 @@
                 "Shopify": "Oseintow\\Shopify\\Facades\\Shopify"
             }
         }
-    },
-    "config": {
-        "preferred-install": "dist"
     }
 }
