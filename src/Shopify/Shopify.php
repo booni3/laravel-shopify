@@ -138,7 +138,7 @@ class Shopify
             ]);
 
         $this->parseResponse($response);
-        $this->checkThrottle($method, $uri, $params = [], $headers = []);
+        $this->checkThrottle($method, $uri, $params, $headers);
         $responseBody = $this->responseBody($response);
 
         if (isset($responseBody['errors']) || $response->getStatusCode() >= 400){
@@ -175,7 +175,7 @@ class Shopify
             $rateLimit = $this->getHeader('HTTP_X_SHOPIFY_SHOP_API_CALL_LIMIT');
             $limit = explode('/', $rateLimit);
             $callsRemaining = $limit[1] - $limit[0];
-            if($callsRemaining === 0){
+            if($callsRemaining < 5){
                 sleep(2);
                 $this->makeRequest($method, $uri, $params, $headers);
             }
