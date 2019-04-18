@@ -182,7 +182,7 @@ class Shopify
     private function wasThrottled($response) : bool
     {
         if($response->getStatusCode() === 429){
-            $seconds = (int) ($response->hasHeader('Retry-After') ? $response->getHeader('Retry-After') : 10);
+            $seconds = (int) ($response->hasHeader('RETRY_AFTER') ? $response->getHeader('RETRY_AFTER') : 10);
             sleep($seconds);
             return true;
         }
