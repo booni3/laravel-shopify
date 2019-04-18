@@ -124,6 +124,8 @@ class Shopify
     {
         $query = in_array($method, ['get','delete']) ? "query" : "json";
 
+        if($this->shouldRateLimit()) sleep(5);
+
         do{
             $response = $this->client->request(strtoupper($method), $this->baseUrl().$uri, [
                 'headers' => array_merge($headers, $this->requestHeaders),
@@ -136,7 +138,7 @@ class Shopify
             $this->parseResponse($response);
             $responseBody = $this->responseBody($response);
 
-        } while ($this->wasThrottled());
+        } while ($this->wasThrottled($response));
 
         if (isset($responseBody['errors']) || $response->getStatusCode() >= 400){
             $errors = is_array($responseBody['errors'])
@@ -166,16 +168,23 @@ class Shopify
         $this->setReasonPhrase($response->getReasonPhrase());
     }
     
-    private function wasThrottled() : bool
+    private function shouldRateLimit() : bool
     {
         if($this->hasHeader('HTTP_X_SHOPIFY_SHOP_API_CALL_LIMIT')){
             $rateLimit = $this->getHeader('HTTP_X_SHOPIFY_SHOP_API_CALL_LIMIT');
             $limit = explode('/', $rateLimit);
             $callsRemaining = $limit[1] - $limit[0];
-            if($callsRemaining < 5){
-                sleep(2);
-                return true;
-            }
+            if($callsRemaining < 5) return true;
+        }
+        return false;
+    }
+
+    private function wasThrottled($response) : bool
+    {
+        if($response->getStatusCode() === 429){
+            $seconds = (int) ($response->hasHeader('Retry-After') ? $response->getHeader('Retry-After') : 10);
+            sleep($seconds);
+            return true;
         }
         return false;
     }
