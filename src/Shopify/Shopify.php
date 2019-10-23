@@ -109,7 +109,7 @@ class Shopify
     public function __call($method, $args)
     {
         list($uri, $params) = [ltrim($args[0],"/"), $args[1] ?? []];
-        
+
         if(substr($uri,0, 4) !== 'http'){
             $uri = $this->baseUrl() . $uri;
         }
@@ -165,7 +165,9 @@ class Shopify
             );
         }
 
-        return (is_array($responseBody) && (count($responseBody) > 0)) ? array_shift($responseBody) : $responseBody;
+        return (is_array($responseBody) && (count($responseBody) > 0))
+            ? array_shift($responseBody)
+            : $responseBody;
     }
 
     private function parseResponse($response)
@@ -302,6 +304,7 @@ class Shopify
     {
         if($link = $this->searchLink($rel)){
             $link = substr($link[0], 1, -1);
+
             $parts = parse_url($link);
             parse_str($parts['query'], $params);
 
@@ -320,11 +323,17 @@ class Shopify
         return false;
     }
 
-    private function searchLink($relType)
+    private function searchLink(string $relType)
     {
-        $index = array_search($relType, array_column($this->responseHeaderLinks, 'rel'));
+        $index = array_search(
+            $relType,
+            array_column($this->responseHeaderLinks, 'rel'));
 
-        return $this->responseHeaderLinks[$index] ?? null;
+        if($index !== false){
+            return $this->responseHeaderLinks[$index];
+        }
+
+        return false;
     }
 
     private function responseBody($response)
