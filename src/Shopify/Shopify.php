@@ -3,6 +3,7 @@
 namespace Oseintow\Shopify;
 
 use GuzzleHttp\Client;
+use function GuzzleHttp\Psr7\parse_header;
 use Oseintow\Shopify\Exceptions\ShopifyApiException;
 use Oseintow\Shopify\Exceptions\ShopifyApiResourceNotFoundException;
 
@@ -14,6 +15,7 @@ class Shopify
     protected $accessToken;
     protected $requestHeaders = [];
     protected $responseHeaders = [];
+    protected $responseHeaderLinks = [];
     protected $client;
     protected $responseStatusCode;
     protected $reasonPhrase;
@@ -47,11 +49,11 @@ class Shopify
         if (is_array($scope)) $scope = implode(",", $scope);
 
         $url = "https://{$this->shopDomain}/admin/oauth/authorize?client_id={$this->key}&scope=" . urlencode($scope);
-        
+
         if ($redirect_url != '') $url .= "&redirect_uri=" . urlencode($redirect_url);
 
         if ($nonce!='') $url .= "&state=" . urlencode($nonce);
-        
+
         return $url;
     }
 
@@ -70,14 +72,14 @@ class Shopify
 
         return $this;
     }
-    
+
     public function setKey($key)
     {
         $this->key = $key;
 
         return $this;
     }
-    
+
     public function setSecret($secret)
     {
         $this->secret = $secret;
@@ -110,6 +112,13 @@ class Shopify
     public function __call($method, $args)
     {
         list($uri, $params) = [ltrim($args[0],"/"), $args[1] ?? []];
+
+        $this->params = $params;
+
+        if(substr($uri,0, 4) !== 'http'){
+            $uri = $this->baseUrl() . $uri;
+        }
+
         $response = $this->makeRequest($method, $uri, $params, $this->setXShopifyAccessToken());
 
         return (is_array($response)) ? $this->convertResponseToCollection($response) : $response;
@@ -124,10 +133,12 @@ class Shopify
     {
         $query = in_array($method, ['get','delete']) ? "query" : "json";
 
-        if($this->shouldRateLimit()) sleep(5);
+        if($this->shouldRateLimit()) {
+            sleep(5);
+        }
 
         do{
-            $response = $this->client->request(strtoupper($method), $this->baseUrl().$uri, [
+            $response = $this->client->request(strtoupper($method), $uri, [
                 'headers' => array_merge($headers, $this->requestHeaders),
                 $query => $params,
                 'timeout' => 120.0,
@@ -166,8 +177,9 @@ class Shopify
         $this->parseHeaders($response->getHeaders());
         $this->setStatusCode($response->getStatusCode());
         $this->setReasonPhrase($response->getReasonPhrase());
+
     }
-    
+
     private function shouldRateLimit() : bool
     {
         if($this->hasHeader('HTTP_X_SHOPIFY_SHOP_API_CALL_LIMIT')){
@@ -254,6 +266,8 @@ class Shopify
         foreach ($headers as $name => $values) {
             $this->responseHeaders = array_merge($this->responseHeaders, [$name => implode(', ', $values)]);
         }
+
+        $this->parseHeaderLinks();
     }
 
     public function getHeaders()
@@ -269,6 +283,48 @@ class Shopify
     public function hasHeader($header)
     {
         return array_key_exists($header, $this->responseHeaders);
+    }
+
+    public function parseHeaderLinks()
+    {
+        if($this->hasHeader('Link')){
+            $this->responseHeaderLinks =  parse_header($this->getHeader('Link'));
+        }
+    }
+
+    public function getNextPage()
+    {
+        return $this->makeLinkRequest('next');
+    }
+
+    public function getPreviousPage()
+    {
+        return $this->makeLinkRequest('previous');
+    }
+
+    private function makeLinkRequest($link)
+    {
+        if($link = $this->searchLink($link)){
+            $link = substr($link[0], 1, -1);
+            $response = $this->makeRequest(
+                'get',
+                $link,
+                $this->params,
+                $this->setXShopifyAccessToken()
+            );
+
+            return (is_array($response)) ? $this->convertResponseToCollection($response) : $response;
+        }
+
+        return false;
+    }
+
+    private function searchLink($relType)
+    {
+        $index = array_search($relType, array_column($this->responseHeaderLinks, 'rel'));
+        if(isset($this->responseHeaderLinks[$index])){
+            return $this->responseHeaderLinks[$index];
+        }
     }
 
     private function responseBody($response)
