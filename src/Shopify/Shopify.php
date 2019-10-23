@@ -27,9 +27,6 @@ class Shopify
         $this->secret = config('shopify.secret');
     }
 
-    /*
-     * Set Shop  Url;
-     */
     public function setShopUrl($shopUrl)
     {
         $url = parse_url($shopUrl);
@@ -112,9 +109,7 @@ class Shopify
     public function __call($method, $args)
     {
         list($uri, $params) = [ltrim($args[0],"/"), $args[1] ?? []];
-
-        $this->params = $params;
-
+        
         if(substr($uri,0, 4) !== 'http'){
             $uri = $this->baseUrl() . $uri;
         }
@@ -146,6 +141,7 @@ class Shopify
                 'http_errors' => false,
                 "verify" => false
             ]);
+
             $this->parseResponse($response);
             $responseBody = $this->responseBody($response);
 
@@ -302,18 +298,23 @@ class Shopify
         return $this->makeLinkRequest('previous');
     }
 
-    private function makeLinkRequest($link)
+    private function makeLinkRequest(string $rel = next)
     {
-        if($link = $this->searchLink($link)){
+        if($link = $this->searchLink($rel)){
             $link = substr($link[0], 1, -1);
+            $parts = parse_url($link);
+            parse_str($parts['query'], $params);
+
             $response = $this->makeRequest(
                 'get',
                 $link,
-                $this->params,
+                $params,
                 $this->setXShopifyAccessToken()
             );
 
-            return (is_array($response)) ? $this->convertResponseToCollection($response) : $response;
+            return (is_array($response))
+                ? $this->convertResponseToCollection($response)
+                : $response;
         }
 
         return false;
@@ -322,9 +323,8 @@ class Shopify
     private function searchLink($relType)
     {
         $index = array_search($relType, array_column($this->responseHeaderLinks, 'rel'));
-        if(isset($this->responseHeaderLinks[$index])){
-            return $this->responseHeaderLinks[$index];
-        }
+
+        return $this->responseHeaderLinks[$index] ?? null;
     }
 
     private function responseBody($response)
